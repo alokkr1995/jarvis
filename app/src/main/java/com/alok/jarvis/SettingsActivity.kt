@@ -78,7 +78,8 @@ class SettingsActivity : Activity() {
 
         val keys = section("API KEYS", "Stored only on this phone")
         val pico = field(keys, "PICOVOICE ACCESS KEY  [wake word · required]", s.picovoiceKey, secret = true)
-        val ant = field(keys, "ANTHROPIC KEY  [brain · required]", s.anthropicKey, secret = true)
+        val gem = field(keys, "GEMINI KEY  [brain · FREE · aistudio.google.com]", s.geminiKey, secret = true)
+        val ant = field(keys, "ANTHROPIC KEY  [brain · paid · optional, used instead of Gemini]", s.anthropicKey, secret = true)
         val oai = field(keys, "OPENAI KEY  [GPT · optional]", s.openaiKey, secret = true)
         val ele = field(keys, "ELEVENLABS KEY  [voice · optional]", s.elevenKey, secret = true)
 
@@ -88,6 +89,7 @@ class SettingsActivity : Activity() {
         val sens = field(voice, "WAKE WORD SENSITIVITY  [0.0 – 1.0]", s.sensitivity.toString())
 
         val brain = section("BRAIN", "Models and personality")
+        val gmm = field(brain, "GEMINI MODEL", s.geminiModel)
         val cm = field(brain, "CLAUDE MODEL", s.claudeModel)
         val gm = field(brain, "GPT MODEL", s.gptModel)
         val pers = field(brain, "PERSONALITY", s.personality, multi = true)
@@ -98,6 +100,7 @@ class SettingsActivity : Activity() {
             background = Ui.HudPanel(this@SettingsActivity, Ui.CYAN, Ui.CYAN, Ui.TEXT, 10f)
             setOnClickListener {
                 s.picovoiceKey = pico.text.toString(); s.anthropicKey = ant.text.toString()
+                s.geminiKey = gem.text.toString(); s.geminiModel = gmm.text.toString()
                 s.openaiKey = oai.text.toString(); s.elevenKey = ele.text.toString()
                 s.voiceId = voiceId.text.toString(); s.language = lang.text.toString()
                 s.sensitivity = sens.text.toString().toFloatOrNull() ?: 0.6f
