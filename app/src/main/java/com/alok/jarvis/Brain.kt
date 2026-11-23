@@ -16,8 +16,11 @@ class Brain(private val context: Context) {
     private val store = Store(context)
     private val history = JSONArray()   // एक बातचीत (session) की history
 
+    private val gHistory = JSONArray()  // Gemini session history
+
     fun resetSession() {
         while (history.length() > 0) history.remove(0)
+        while (gHistory.length() > 0) gHistory.remove(0)
     }
 
     private fun systemPrompt(): String {
@@ -95,7 +98,10 @@ $rules
 
     /** User की बात लो, Claude से जवाब लाओ (tools चलाते हुए)। Background thread पर call करें। */
     fun ask(userText: String): String {
-        if (settings.anthropicKey.isBlank()) return "Sir, please add the Anthropic API key in Setup first."
+        if (settings.anthropicKey.isBlank()) {
+            if (settings.geminiKey.isNotBlank()) return askGemini(userText)
+            return "Sir, please add a Gemini or Anthropic key in Setup first."
+        }
         history.put(JSONObject().put("role", "user").put("content", userText))
 
         repeat(8) {   // ज़्यादा से ज़्यादा 8 tool rounds
@@ -132,6 +138,54 @@ $rules
                 }
             }
             history.put(JSONObject().put("role", "user").put("content", results))
+        }
+        return "Sir, that got a bit tangled. Could you say it again?"
+    }
+
+    /** Free brain: Google Gemini with function calling */
+    private fun askGemini(userText: String): String {
+        val decls = JSONArray()
+        for (i in 0 until tools.length()) {
+            val t = tools.getJSONObject(i)
+            decls.put(JSONObject().put("name", t.getString("name"))
+                .put("description", t.getString("description"))
+                .put("parameters", t.getJSONObject("input_schema")))
+        }
+        gHistory.put(JSONObject().put("role", "user")
+            .put("parts", JSONArray().put(JSONObject().put("text", userText))))
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/${settings.geminiModel}:generateContent"
+
+        repeat(8) {
+            val body = JSONObject()
+                .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", systemPrompt()))))
+                .put("contents", gHistory)
+                .put("tools", JSONArray().put(JSONObject().put("functionDeclarations", decls)))
+            val resp = Http.postJson(url, mapOf("x-goog-api-key" to settings.geminiKey), body)
+            val cands = resp.optJSONArray("candidates")
+            if (cands == null || cands.length() == 0) return "Sir, Gemini didn't return an answer. Try again."
+            val content = cands.getJSONObject(0).optJSONObject("content")
+                ?: return "Sir, Gemini didn't return an answer. Try again."
+            if (!content.has("role")) content.put("role", "model")
+            gHistory.put(content)
+            val parts = content.optJSONArray("parts") ?: JSONArray()
+
+            val responses = JSONArray()
+            val sb = StringBuilder()
+            for (i in 0 until parts.length()) {
+                val part = parts.getJSONObject(i)
+                val call = part.optJSONObject("functionCall")
+                if (call != null) {
+                    val out = runTool(call.getString("name"), call.optJSONObject("args") ?: JSONObject())
+                    val fr = JSONObject().put("name", call.getString("name"))
+                        .put("response", JSONObject().put("result", out))
+                    if (call.has("id")) fr.put("id", call.getString("id"))
+                    responses.put(JSONObject().put("functionResponse", fr))
+                } else if (part.has("text") && !part.optBoolean("thought", false)) {
+                    sb.append(part.getString("text")).append(' ')
+                }
+            }
+            if (responses.length() == 0) return sb.toString().trim().ifBlank { "Done, Sir." }
+            gHistory.put(JSONObject().put("role", "user").put("parts", responses))
         }
         return "Sir, that got a bit tangled. Could you say it again?"
     }
