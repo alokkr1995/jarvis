@@ -38,7 +38,6 @@ class JarvisService : Service() {
             Handler(Looper.getMainLooper()).post { chatListener?.invoke(fromUser, text) }
         }
         fun log(msg: String) {
-            android.util.Log.d("Jarvis", msg)
             Handler(Looper.getMainLooper()).post { logListener?.invoke(msg) }
         }
         private const val CHANNEL = "jarvis_service"
@@ -73,7 +72,7 @@ class JarvisService : Service() {
         val n = Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle("Jarvis is online")
-            .setContentText("Say \"Hey Jarvis\" anytime")
+            .setContentText("Say \"Jarvis\" anytime")
             .setContentIntent(open)
             .setOngoing(true)
             .build()
@@ -89,12 +88,11 @@ class JarvisService : Service() {
         if (inSession) return
         try {
             if (wake == null) {
-                val threshold = (1f - settings.sensitivity).coerceIn(0.2f, 0.85f)
-                wake = WakeWord(this, threshold) { main.post { onWake() } }
+                wake = WakeWord(this, settings.sensitivity) { main.post { onWake() } }
             }
             wake?.start()
             setState("idle")
-            log("Listening for \"Hey Jarvis\"")
+            log("Listening for \"Jarvis\"")
         } catch (e: Exception) {
             log("Wake word unavailable (${e.message}) — tap the orb to talk")
             setState("idle")
@@ -184,13 +182,13 @@ class JarvisService : Service() {
     }
 
     /** Reminder का समय होने पर बोलकर बताना */
-    fun speakReminder(text: String) {
+    fun speakReminder(text: String?) {
         if (inSession) return
         inSession = true
         stopWakeWord()
         setState("speaking")
-        chat(false, "REMINDER: $text")
-        voice.speak("सर, रिमाइंडर: $text") { inSession = false; startWakeWord() }
+        if (text != null) chat(false, "REMINDER: $text")
+        voice.speak(if (text != null) "सर, रिमाइंडर: $text" else "सर, आपका एक रिमाइंडर है। फ़ोन अनलॉक करके देख लीजिए।") { inSession = false; startWakeWord() }
     }
 
     override fun onDestroy() {
