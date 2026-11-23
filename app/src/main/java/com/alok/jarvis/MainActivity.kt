@@ -51,9 +51,9 @@ class MainActivity : Activity() {
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         top.addView(label("JARVIS", 15f, Ui.TEXT).apply { typeface = Ui.LIGHT; letterSpacing = 0.45f },
             LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-        updateBtn = label("Update", 12f, Ui.BG).apply {
-            typeface = Ui.MEDIUM; gravity = Gravity.CENTER; visibility = View.GONE
-            background = pill(Ui.AMBER, null); setPadding(dp(12f), dp(6f), dp(12f), dp(6f))
+        updateBtn = label("Update", 12f, Ui.TEXT).apply {
+            typeface = Ui.MEDIUM; gravity = Gravity.CENTER
+            background = pill(Ui.BG, Ui.LINE); setPadding(dp(12f), dp(6f), dp(12f), dp(6f))
             setOnClickListener { Updater.check(this@MainActivity, silent = false) }
         }
         top.addView(updateBtn)
@@ -120,7 +120,9 @@ class MainActivity : Activity() {
         render(if (JarvisService.instance == null) "off" else JarvisService.currentState)
         if (!updateChecked) {
             updateChecked = true
-            Updater.check(this, silent = true) { updateBtn.visibility = View.VISIBLE }
+            Updater.check(this, silent = true) {
+                updateBtn.text = "Update ●"; updateBtn.setTextColor(Ui.BG); updateBtn.background = pill(Ui.AMBER, null)
+            }
             if (!Settings(this).hasBrain) startActivity(Intent(this, QuickSetupActivity::class.java))
         }
     }
@@ -135,15 +137,13 @@ class MainActivity : Activity() {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) when (KeyGrabber.grab(this)) {
             "gemini" -> toast("Gemini key saved ✓")
-            "picovoice" -> toast("Wake-word key saved ✓ — restart Jarvis")
         }
     }
 
     private fun render(s: String) {
         orb.state = s
-        val wake = Settings(this).picovoiceKey.isNotBlank()
         status.text = when (s) {
-            "idle" -> if (wake) "Say \"Jarvis\" or tap the orb" else "Tap the orb to talk"
+            "idle" -> "Say \"Hey Jarvis\" or tap the orb"
             "listening" -> "Listening…"
             "thinking" -> "Thinking…"
             "speaking" -> "Speaking…"
@@ -194,7 +194,8 @@ class MainActivity : Activity() {
     }
 
     private fun askPermissions() {
-        val need = mutableListOf(Manifest.permission.RECORD_AUDIO)
+        val need = mutableListOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.READ_CONTACTS,
+            Manifest.permission.CALL_PHONE, Manifest.permission.SEND_SMS)
         if (Build.VERSION.SDK_INT >= 33) need += Manifest.permission.POST_NOTIFICATIONS
         val missing = need.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isNotEmpty()) requestPermissions(missing.toTypedArray(), 1)
