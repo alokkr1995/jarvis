@@ -37,20 +37,28 @@ jobs:
           fi
           echo "$JARVIS_KEYSTORE" | base64 -d > app/jarvis.keystore
 
-      - name: Download free wake-word models (openWakeWord)
+      - name: Download offline wake-word engine + "Jarvis" model (sherpa-onnx, Apache-2.0)
         run: |
-          mkdir -p app/src/main/assets
-          base=https://github.com/dscripka/openWakeWord/releases/download/v0.5.1
-          curl -fsSL -o app/src/main/assets/melspectrogram.onnx $base/melspectrogram.onnx
-          curl -fsSL -o app/src/main/assets/embedding_model.onnx $base/embedding_model.onnx
-          curl -fsSL -o app/src/main/assets/hey_jarvis.onnx $base/hey_jarvis_v0.1.onnx
-          ls -la app/src/main/assets
+          set -e
+          mkdir -p app/libs app/src/main/assets/kws
+          rel=https://github.com/k2-fsa/sherpa-onnx/releases/download
+          curl -fsSL -o app/libs/sherpa-onnx.aar $rel/v2.0.3/sherpa-onnx-2.0.3.aar
+          curl -fsSL -o /tmp/kws.tar.bz2 $rel/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2
+          tar xjf /tmp/kws.tar.bz2 -C /tmp
+          m=/tmp/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01
+          cp $m/encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx app/src/main/assets/kws/encoder.onnx
+          cp $m/decoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx app/src/main/assets/kws/decoder.onnx
+          cp $m/joiner-epoch-12-avg-2-chunk-16-left-64.int8.onnx app/src/main/assets/kws/joiner.onnx
+          cp $m/tokens.txt app/src/main/assets/kws/tokens.txt
+          printf '\xe2\x96\x81JA R VI S @JARVIS\n' > app/src/main/assets/kws/keywords.txt
+          cat app/src/main/assets/kws/keywords.txt
+          ls -la app/libs app/src/main/assets/kws
 
       - name: Build APK
-        run: gradle assembleDebug --stacktrace
+        run: gradle assembleRelease --stacktrace
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk Jarvis.apk
+        run: cp app/build/outputs/apk/release/app-release.apk Jarvis.apk
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
