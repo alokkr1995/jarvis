@@ -20,7 +20,7 @@ import android.widget.TextView
 import android.widget.Toast
 
 /** Minimal main screen */
-class MainActivity : Activity() {
+class MainActivity : SecureActivity() {
     private lateinit var orb: OrbView
     private lateinit var status: TextView
     private lateinit var chatBox: LinearLayout
@@ -113,8 +113,7 @@ class MainActivity : Activity() {
         askPermissions()
     }
 
-    override fun onResume() {
-        super.onResume()
+    override fun onUnlocked() {
         JarvisService.stateListener = { render(it) }
         JarvisService.chatListener = { u, t -> addBubble(u, t) }
         render(if (JarvisService.instance == null) "off" else JarvisService.currentState)
@@ -135,7 +134,7 @@ class MainActivity : Activity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) when (KeyGrabber.grab(this)) {
+        if (hasFocus && AppLock.isUnlocked) when (KeyGrabber.grab(this)) {
             "gemini" -> toast("Gemini key saved ✓")
         }
     }
@@ -143,7 +142,7 @@ class MainActivity : Activity() {
     private fun render(s: String) {
         orb.state = s
         status.text = when (s) {
-            "idle" -> "Say \"Hey Jarvis\" or tap the orb"
+            "idle" -> "Say \"Jarvis\" or tap the orb"
             "listening" -> "Listening…"
             "thinking" -> "Thinking…"
             "speaking" -> "Speaking…"
