@@ -114,6 +114,17 @@ class SettingsActivity : Activity() {
             setOnClickListener { startActivity(Intent(AndroidSettings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
         }, LinearLayout.LayoutParams(MATCH_PARENT, dp(48f)).apply { topMargin = dp(12f) })
 
+        col.addView(mono("CHECK FOR UPDATES", 11f, Ui.AMBER, bold = true).apply {
+            gravity = Gravity.CENTER; letterSpacing = 0.08f
+            background = Ui.HudPanel(this@SettingsActivity, Ui.PANEL, Ui.LINE, Ui.AMBER, 8f)
+            setOnClickListener { Updater.check(this@SettingsActivity, silent = false) }
+        }, LinearLayout.LayoutParams(MATCH_PARENT, dp(48f)).apply { topMargin = dp(12f) })
+
+        val build = packageManager.getPackageInfo(packageName, 0).longVersionCode
+        col.addView(mono("INSTALLED BUILD $build", 9f, Ui.MUTED).apply {
+            gravity = Gravity.CENTER; setPadding(0, dp(10f), 0, 0)
+        }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+
         setContentView(ScrollView(this).apply { background = Ui.GridBackground(this@SettingsActivity); addView(col) })
     }
 }
