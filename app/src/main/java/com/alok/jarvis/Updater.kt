@@ -40,7 +40,8 @@ object Updater {
                 var url: String? = null
                 for (i in 0 until assets.length()) {
                     val asset = assets.getJSONObject(i)
-                    if (asset.getString("name").endsWith(".apk")) url = asset.getString("browser_download_url")
+                    val u = asset.getString("browser_download_url")
+                    if (asset.getString("name").endsWith(".apk") && u.startsWith("https://github.com/alokkr1995/jarvis/releases/download/")) url = u
                 }
                 val cur = currentBuild(a)
                 main.post {
@@ -84,10 +85,17 @@ object Updater {
                     val code = conn.responseCode
                     if (code in 300..399 && hops < 5) {
                         link = conn.getHeaderField("Location"); conn.disconnect(); hops++
+                        require(link.startsWith("https://")) { "insecure redirect" }
                     } else break
                 }
                 conn.inputStream.use { input -> f.outputStream().use { input.copyTo(it) } }
                 conn.disconnect()
+                // Security: only install if it is signed with the same key as this app
+                if (!UpdateCheck.sameSigner(a, f)) {
+                    f.delete()
+                    main.post { Toast.makeText(a, "Update blocked: file is not signed by Jarvis", Toast.LENGTH_LONG).show() }
+                    return@Thread
+                }
                 val uri = FileProvider.getUriForFile(a, "com.alok.jarvis.files", f)
                 main.post {
                     a.startActivity(Intent(Intent.ACTION_VIEW).apply {
