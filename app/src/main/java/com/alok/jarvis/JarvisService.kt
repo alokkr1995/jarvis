@@ -1,8 +1,5 @@
 package com.alok.jarvis
 
-import ai.picovoice.porcupine.Porcupine
-import ai.picovoice.porcupine.PorcupineManager
-import ai.picovoice.porcupine.PorcupineManagerCallback
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -52,7 +49,7 @@ class JarvisService : Service() {
     private lateinit var settings: Settings
     private lateinit var brain: Brain
     private lateinit var voice: Voice
-    private var porcupine: PorcupineManager? = null
+    private var wake: WakeWord? = null
     private var recognizer: SpeechRecognizer? = null
     private var inSession = false
 
@@ -76,7 +73,7 @@ class JarvisService : Service() {
         val n = Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle("Jarvis is online")
-            .setContentText("Say \"Jarvis\" or tap to open")
+            .setContentText("Say \"Hey Jarvis\" anytime")
             .setContentIntent(open)
             .setOngoing(true)
             .build()
@@ -89,26 +86,23 @@ class JarvisService : Service() {
 
     // ---------- Wake word ----------
     private fun startWakeWord() {
+        if (inSession) return
         try {
-            if (porcupine == null) {
-                if (settings.picovoiceKey.isBlank()) { log("No wake-word key — tap the core to talk"); setState("idle"); return }
-                porcupine = PorcupineManager.Builder()
-                    .setAccessKey(settings.picovoiceKey)
-                    .setKeyword(Porcupine.BuiltInKeyword.JARVIS)
-                    .setSensitivity(settings.sensitivity)
-                    .build(this, PorcupineManagerCallback { _ -> main.post { onWake() } })
+            if (wake == null) {
+                val threshold = (1f - settings.sensitivity).coerceIn(0.2f, 0.85f)
+                wake = WakeWord(this, threshold) { main.post { onWake() } }
             }
-            porcupine?.start()
+            wake?.start()
             setState("idle")
-            log("Waiting for wake word")
+            log("Listening for \"Hey Jarvis\"")
         } catch (e: Exception) {
-            log("Wake word error: ${e.message}")
-            setState("error")
+            log("Wake word unavailable (${e.message}) — tap the orb to talk")
+            setState("idle")
         }
     }
 
     private fun stopWakeWord() {
-        try { porcupine?.stop() } catch (_: Exception) {}
+        try { wake?.stop() } catch (_: Exception) {}
     }
 
     private fun onWake() {
@@ -155,13 +149,13 @@ class JarvisService : Service() {
         chat(true, text)
         val lower = text.lowercase().trim()
         if (STOP_WORDS.any { lower == it || lower.endsWith(it) }) {
-            voice.speak("Theek hai, Sir.") { endSession() }
+            voice.speak("ठीक है सर।") { endSession() }
             return
         }
         setState("thinking")
         Thread {
             val reply = try { brain.ask(text) } catch (e: Exception) {
-                log("Error: ${e.message}"); "Sir, I'm having trouble connecting right now."
+                log("Error: ${e.message}"); "सर, अभी इंटरनेट से जुड़ने में दिक्कत आ रही है।"
             }
             main.post {
                 log("Jarvis: $reply")
@@ -196,14 +190,14 @@ class JarvisService : Service() {
         stopWakeWord()
         setState("speaking")
         chat(false, "REMINDER: $text")
-        voice.speak("Sir, reminder: $text") { inSession = false; startWakeWord() }
+        voice.speak("सर, रिमाइंडर: $text") { inSession = false; startWakeWord() }
     }
 
     override fun onDestroy() {
         instance = null
         setState("off")
         recognizer?.destroy()
-        try { porcupine?.stop(); porcupine?.delete() } catch (_: Exception) {}
+        try { wake?.close() } catch (_: Exception) {}
         voice.shutdown()
         super.onDestroy()
     }
