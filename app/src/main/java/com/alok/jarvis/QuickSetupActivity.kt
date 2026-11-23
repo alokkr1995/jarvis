@@ -109,7 +109,7 @@ class QuickSetupActivity : Activity() {
 
 /** Reads the clipboard and saves any recognised key. Returns which key was saved, or null. */
 object KeyGrabber {
-    private val GEMINI = Regex("^AIza[0-9A-Za-z_\\-]{30,}$")
+    private val GEMINI = Regex("^(AIza[0-9A-Za-z_\\-]{30,}|AQ\\.[0-9A-Za-z_\\-.]{30,})$")
     private val PICO = Regex("^[A-Za-z0-9+/]{40,}={0,2}$")
 
     fun grab(a: Activity): String? {
@@ -119,7 +119,7 @@ object KeyGrabber {
             val s = Settings(a)
             when {
                 GEMINI.matches(text) && text != s.geminiKey -> { s.geminiKey = text; "gemini" }
-                PICO.matches(text) && !text.startsWith("AIza") && text != s.picovoiceKey -> { s.picovoiceKey = text; "picovoice" }
+                PICO.matches(text) && !text.startsWith("AIza") && !text.startsWith("AQ.") && text != s.picovoiceKey -> { s.picovoiceKey = text; "picovoice" }
                 else -> null
             }
         } catch (e: Exception) { null }
