@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Jarvis</string>
+    <string name="autosend_desc">Lets Jarvis tap WhatsApp\'s Send button right after it opens a chat for you. It only works on WhatsApp and only for a few seconds after you ask Jarvis to send a message.</string>
 </resources>
