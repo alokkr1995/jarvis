@@ -20,7 +20,7 @@ class Settings(context: Context) {
         set(v) = p.edit().putString("gemini", v.trim()).apply()
 
     var geminiModel: String
-        get() = p.getString("gemini_model", "gemini-flash-latest") ?: "gemini-flash-latest"
+        get() = p.getString("gemini_model", "gemini-flash-lite-latest") ?: "gemini-flash-lite-latest"
         set(v) = p.edit().putString("gemini_model", v.trim()).apply()
 
     /** true = brain has at least one key */
