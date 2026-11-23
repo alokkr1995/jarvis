@@ -12,6 +12,7 @@ object Http {
     }
 
     fun postRaw(url: String, headers: Map<String, String>, body: JSONObject): ByteArray {
+        require(url.startsWith("https://")) { "Only secure (https) connections are allowed" }
         val c = URL(url).openConnection() as HttpURLConnection
         c.requestMethod = "POST"
         c.connectTimeout = 15000
