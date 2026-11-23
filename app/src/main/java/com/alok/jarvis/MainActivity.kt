@@ -19,7 +19,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 
-/** मुख्य screen: orb + status + बातचीत + लिखकर पूछना + ON/OFF */
+/** Main HUD screen: core + status + transcript + text input + power */
 class MainActivity : Activity() {
     private lateinit var orb: OrbView
     private lateinit var status: TextView
@@ -29,6 +29,11 @@ class MainActivity : Activity() {
     private lateinit var empty: TextView
     private fun dp(v: Float) = Ui.dp(this, v)
 
+    private fun mono(t: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
+        text = t; textSize = size; setTextColor(color)
+        typeface = if (bold) Ui.MONO_BOLD else Ui.MONO
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Ui.BG
@@ -36,55 +41,48 @@ class MainActivity : Activity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Ui.BG)
-            setPadding(dp(20f), dp(18f), dp(20f), dp(18f))
+            background = Ui.GridBackground(this@MainActivity)
+            setPadding(dp(18f), dp(16f), dp(18f), dp(16f))
         }
 
-        // ---- Top bar ----
+        // ---- Header ----
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         val titleCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        titleCol.addView(TextView(this).apply {
-            text = "J.A.R.V.I.S"; setTextColor(Ui.CYAN); textSize = 22f; typeface = Ui.MONO; letterSpacing = 0.15f
-        })
-        titleCol.addView(TextView(this).apply {
-            text = "Alok का personal assistant"; setTextColor(Ui.MUTED); textSize = 12f
-        })
+        titleCol.addView(mono("JARVIS", 24f, Ui.CYAN, bold = true).apply { letterSpacing = 0.35f })
+        titleCol.addView(mono("PERSONAL ASSISTANT // ALOK", 10f, Ui.MUTED).apply { letterSpacing = 0.12f })
         top.addView(titleCol, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-        top.addView(TextView(this).apply {
-            text = "⚙"; textSize = 22f; setTextColor(Ui.TEXT); gravity = Gravity.CENTER
-            background = Ui.rounded(this@MainActivity, Ui.SURFACE, 14f, Ui.BORDER)
+        top.addView(mono("SETUP", 11f, Ui.CYAN, bold = true).apply {
+            gravity = Gravity.CENTER; letterSpacing = 0.1f
+            background = Ui.HudPanel(this@MainActivity, Ui.PANEL, Ui.LINE, Ui.CYAN, 6f)
             setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
-        }, LinearLayout.LayoutParams(dp(46f), dp(46f)))
+        }, LinearLayout.LayoutParams(dp(72f), dp(36f)))
         root.addView(top)
 
-        // ---- Orb ----
+        // ---- Core ----
         orb = OrbView(this).apply {
             setOnClickListener { onOrbTap() }
-            contentDescription = "Jarvis से बात करें"
+            contentDescription = "Talk to Jarvis"
         }
-        root.addView(orb, LinearLayout.LayoutParams(MATCH_PARENT, dp(260f)))
+        root.addView(orb, LinearLayout.LayoutParams(MATCH_PARENT, dp(270f)))
 
-        status = TextView(this).apply {
-            setTextColor(Ui.TEXT); textSize = 16f; typeface = Ui.MEDIUM; gravity = Gravity.CENTER
-        }
+        status = mono("", 14f, Ui.TEXT, bold = true).apply { gravity = Gravity.CENTER; letterSpacing = 0.08f }
         root.addView(status, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-        root.addView(TextView(this).apply {
-            text = "Orb पर tap करें या बोलें \"Jarvis\""; setTextColor(Ui.MUTED); textSize = 12f; gravity = Gravity.CENTER
-            setPadding(0, dp(4f), 0, dp(14f))
+        root.addView(mono("TAP THE CORE OR SAY \"JARVIS\"", 10f, Ui.MUTED).apply {
+            gravity = Gravity.CENTER; letterSpacing = 0.1f; setPadding(0, dp(4f), 0, dp(12f))
         })
 
-        // ---- Chat ----
+        // ---- Transcript ----
         val chatCard = FrameLayout(this).apply {
-            background = Ui.rounded(this@MainActivity, Ui.SURFACE, 20f, Ui.BORDER)
+            background = Ui.HudPanel(this@MainActivity, Ui.alpha(Ui.PANEL, 230))
             setPadding(dp(12f), dp(12f), dp(12f), dp(12f))
         }
         chatScroll = ScrollView(this).apply { isVerticalScrollBarEnabled = false }
         chatBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         chatScroll.addView(chatBox)
-        empty = TextView(this).apply {
-            text = "यहाँ आपकी और Jarvis की बातचीत दिखेगी।\n\nकुछ आज़माइए:\n• \"कल 9 बजे dubbing studio call का reminder लगाओ\"\n• \"BIT के लिए note करो…\"\n• \"GPT से पूछो…\"\n• \"आज के काम क्या हैं?\""
-            setTextColor(Ui.MUTED); textSize = 13f; setLineSpacing(0f, 1.25f)
-        }
+        empty = mono(
+            "// TRANSCRIPT\n\nYour conversation with Jarvis appears here.\n\nTry:\n> Set a reminder for 9 AM tomorrow\n> Take a note for BIT\n> Ask GPT for a reel hook\n> What's on my list today?",
+            12f, Ui.MUTED
+        ).apply { setLineSpacing(0f, 1.3f) }
         chatCard.addView(empty)
         chatCard.addView(chatScroll)
         root.addView(chatCard, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
@@ -95,36 +93,37 @@ class MainActivity : Activity() {
             setPadding(0, dp(12f), 0, dp(12f))
         }
         val input = EditText(this).apply {
-            hint = "Jarvis को लिखें…"; setHintTextColor(Ui.MUTED); setTextColor(Ui.TEXT); textSize = 15f
-            background = Ui.rounded(this@MainActivity, Ui.SURFACE2, 24f, Ui.BORDER)
-            setPadding(dp(18f), dp(12f), dp(18f), dp(12f))
+            hint = "Type a command…"; setHintTextColor(Ui.MUTED); setTextColor(Ui.TEXT); textSize = 14f
+            typeface = Ui.MONO
+            background = Ui.HudPanel(this@MainActivity, Ui.PANEL2, Ui.LINE, Ui.CYAN_DIM, 6f)
+            setPadding(dp(14f), dp(12f), dp(14f), dp(12f))
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             imeOptions = EditorInfo.IME_ACTION_SEND
         }
-        val send = TextView(this).apply {
-            text = "➤"; textSize = 20f; setTextColor(Ui.BG); gravity = Gravity.CENTER
-            background = Ui.rounded(this@MainActivity, Ui.CYAN, 24f)
+        val send = mono("SEND", 12f, Ui.BG, bold = true).apply {
+            gravity = Gravity.CENTER
+            background = Ui.HudPanel(this@MainActivity, Ui.CYAN, Ui.CYAN, Ui.TEXT, 6f)
         }
         fun doSend() {
             val t = input.text.toString().trim()
             if (t.isEmpty()) return
             val svc = JarvisService.instance
-            if (svc == null) { toast("पहले नीचे से Jarvis ON करें"); return }
+            if (svc == null) { toast("Bring Jarvis online first"); return }
             svc.askTyped(t); input.setText("")
         }
         send.setOnClickListener { doSend() }
         input.setOnEditorActionListener { _, id, _ -> if (id == EditorInfo.IME_ACTION_SEND) { doSend(); true } else false }
         inputRow.addView(input, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-        inputRow.addView(View(this), LinearLayout.LayoutParams(dp(10f), 1))
-        inputRow.addView(send, LinearLayout.LayoutParams(dp(48f), dp(48f)))
+        inputRow.addView(View(this), LinearLayout.LayoutParams(dp(8f), 1))
+        inputRow.addView(send, LinearLayout.LayoutParams(dp(68f), dp(46f)))
         root.addView(inputRow)
 
         // ---- Power ----
-        power = TextView(this).apply {
-            textSize = 15f; typeface = Ui.MEDIUM; gravity = Gravity.CENTER; letterSpacing = 0.05f
+        power = mono("", 13f, Ui.TEXT, bold = true).apply {
+            gravity = Gravity.CENTER; letterSpacing = 0.15f
             setOnClickListener { togglePower() }
         }
-        root.addView(power, LinearLayout.LayoutParams(MATCH_PARENT, dp(54f)))
+        root.addView(power, LinearLayout.LayoutParams(MATCH_PARENT, dp(52f)))
 
         setContentView(root)
         askPermissions()
@@ -146,35 +145,37 @@ class MainActivity : Activity() {
     private fun render(s: String) {
         orb.state = s
         status.text = when (s) {
-            "idle" -> "सुन रहा हूँ — बोलिए \"Jarvis\""
-            "listening" -> "🎤 बोलिए, Sir…"
-            "thinking" -> "सोच रहा हूँ…"
-            "speaking" -> "🔊 बोल रहा हूँ…"
-            "error" -> "⚠ Settings में Picovoice key जाँचिए"
-            else -> "Jarvis बंद है"
+            "idle" -> "ONLINE — LISTENING FOR \"JARVIS\""
+            "listening" -> "GO AHEAD, SIR"
+            "thinking" -> "PROCESSING…"
+            "speaking" -> "RESPONDING…"
+            "error" -> "FAULT — CHECK PICOVOICE KEY IN SETUP"
+            else -> "SYSTEM OFFLINE"
         }
+        status.setTextColor(if (s == "error") Ui.RED else if (s == "thinking") Ui.AMBER else Ui.TEXT)
         val on = JarvisService.instance != null
-        power.text = if (on) "●  JARVIS ON  —  बंद करने के लिए tap" else "○  JARVIS OFF  —  चालू करने के लिए tap"
-        power.setTextColor(if (on) Ui.BG else Ui.TEXT)
-        power.background = if (on) Ui.gradient(this, intArrayOf(Ui.CYAN, Ui.BLUE), 27f)
-                           else Ui.rounded(this, Ui.SURFACE2, 27f, Ui.BORDER)
+        power.text = if (on) "■  SYSTEM ONLINE  ·  TAP TO SHUT DOWN" else "▶  SYSTEM OFFLINE  ·  TAP TO START"
+        power.setTextColor(if (on) Ui.BG else Ui.CYAN)
+        power.background = if (on) Ui.HudPanel(this, Ui.CYAN, Ui.CYAN, Ui.TEXT, 10f)
+                           else Ui.HudPanel(this, Ui.PANEL, Ui.LINE, Ui.CYAN, 10f)
     }
 
     private fun addBubble(fromUser: Boolean, text: String) {
         empty.visibility = View.GONE
-        val b = TextView(this).apply {
-            this.text = text; textSize = 14.5f; setLineSpacing(0f, 1.2f)
-            setTextColor(if (fromUser) Ui.BG else Ui.TEXT)
-            background = if (fromUser) Ui.gradient(this@MainActivity, intArrayOf(Ui.CYAN, Ui.BLUE), 18f)
-                         else Ui.rounded(this@MainActivity, Ui.SURFACE2, 18f, Ui.BORDER)
-            setPadding(dp(14f), dp(10f), dp(14f), dp(10f))
-            maxWidth = (resources.displayMetrics.widthPixels * 0.72f).toInt()
-        }
-        val lp = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
-            gravity = if (fromUser) Gravity.END else Gravity.START
-            topMargin = dp(8f)
-        }
-        chatBox.addView(b, lp)
+        val wrap = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        wrap.addView(mono(if (fromUser) "YOU" else "JARVIS", 9f, if (fromUser) Ui.MUTED else Ui.CYAN, bold = true).apply {
+            letterSpacing = 0.15f; gravity = if (fromUser) Gravity.END else Gravity.START
+        }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        wrap.addView(TextView(this).apply {
+            this.text = text; textSize = 14f; setLineSpacing(0f, 1.2f); setTextColor(Ui.TEXT)
+            background = if (fromUser) Ui.HudPanel(this@MainActivity, Ui.PANEL2, Ui.LINE, Ui.MUTED, 6f)
+                         else Ui.HudPanel(this@MainActivity, Ui.alpha(Ui.CYAN, 22), Ui.CYAN_DIM, Ui.CYAN, 6f)
+            setPadding(dp(12f), dp(9f), dp(12f), dp(9f))
+            maxWidth = (resources.displayMetrics.widthPixels * 0.74f).toInt()
+        }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
+            gravity = if (fromUser) Gravity.END else Gravity.START; topMargin = dp(3f)
+        })
+        chatBox.addView(wrap, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10f) })
         chatScroll.post { chatScroll.fullScroll(View.FOCUS_DOWN) }
     }
 
@@ -190,11 +191,11 @@ class MainActivity : Activity() {
             return
         }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            askPermissions(); toast("Mic की permission दीजिए"); return
+            askPermissions(); toast("Microphone permission is required"); return
         }
         val s = Settings(this)
         if (s.anthropicKey.isBlank() || s.picovoiceKey.isBlank()) {
-            toast("पहले ⚙ Settings में Picovoice और Anthropic keys डालिए")
+            toast("Add your Picovoice and Anthropic keys in SETUP first")
             startActivity(Intent(this, SettingsActivity::class.java)); return
         }
         startForegroundService(Intent(this, JarvisService::class.java))
