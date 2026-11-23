@@ -17,7 +17,7 @@ object Reminders {
     fun schedule(context: Context, text: String, isoDateTime: String): String {
         val dt = LocalDateTime.parse(isoDateTime.take(16))
         val millis = dt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        if (millis < System.currentTimeMillis()) return "ये समय बीत चुका है: $isoDateTime"
+        if (millis < System.currentTimeMillis()) return "That time has already passed: $isoDateTime"
 
         val intent = Intent(context, ReminderReceiver::class.java).putExtra("text", text)
         val pi = PendingIntent.getBroadcast(
