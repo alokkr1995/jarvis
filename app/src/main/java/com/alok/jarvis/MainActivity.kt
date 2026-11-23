@@ -200,7 +200,7 @@ class MainActivity : Activity() {
         chipNotes.text = "NOTES ${store.notesCount()}"
         val s = Settings(this)
         val build = packageManager.getPackageInfo(packageName, 0).longVersionCode
-        sysInfo.text = "BUILD  $build\nCORE   CLAUDE\nVOICE  ${if (s.elevenKey.isBlank()) "PHONE" else "ELEVENLABS"}\nWAKE   \"JARVIS\""
+        sysInfo.text = "BUILD  $build\nCORE   ${if (s.anthropicKey.isNotBlank()) "CLAUDE" else if (s.geminiKey.isNotBlank()) "GEMINI" else "--"}\nVOICE  ${if (s.elevenKey.isBlank()) "PHONE" else "ELEVENLABS"}\nWAKE   \"JARVIS\""
     }
 
     override fun onResume() {
@@ -297,8 +297,8 @@ class MainActivity : Activity() {
             askPermissions(); toast("Microphone permission is required"); return
         }
         val s = Settings(this)
-        if (s.anthropicKey.isBlank() || s.picovoiceKey.isBlank()) {
-            toast("Add your Picovoice and Anthropic keys in SETUP first")
+        if (!s.hasBrain || s.picovoiceKey.isBlank()) {
+            toast("Add your Picovoice key and a Gemini (free) key in SETUP first")
             startActivity(Intent(this, SettingsActivity::class.java)); return
         }
         startForegroundService(Intent(this, JarvisService::class.java))
