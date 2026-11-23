@@ -22,17 +22,17 @@ class Brain(private val context: Context) {
 
     private fun systemPrompt(): String {
         val now = SimpleDateFormat("EEEE, dd MMM yyyy, HH:mm", Locale.ENGLISH).format(Date())
-        val rules = settings.customRules.ifBlank { "(अभी कोई नहीं)" }
+        val rules = settings.customRules.ifBlank { "(none yet)" }
         return """
 ${settings.personality}
 
-अभी का समय: $now (India time)।
+Current time: $now (India).
 
-Tools का इस्तेमाल करो जब ज़रूरत हो: notes, to-do lists, reminders, GPT से पूछना, custom नियम याद रखना।
-Reminder के लिए datetime हमेशा ISO format में दो, जैसे 2026-11-24T09:00।
-अगर कोई काम तुम्हारे पास अभी नहीं है (जैसे WhatsApp, calendar, call), तो साफ़ बोलो कि ये अगले phase में आएगा।
+Use tools when needed: notes, to-do lists, reminders, asking GPT, remembering custom rules.
+For reminders always pass datetime in ISO format, e.g. 2026-11-24T09:00.
+If asked for something you can't do yet (WhatsApp, calendar, calls), say clearly that it's coming in the next update.
 
-Alok के custom नियम:
+Alok's custom rules:
 $rules
 """.trim()
     }
@@ -47,29 +47,29 @@ $rules
         fun str(d: String) = JSONObject().put("type", "string").put("description", d)
 
         JSONArray()
-            .put(tool("ask_gpt", "OpenAI GPT से कोई सवाल पूछो, जब Alok बोले 'GPT से पूछो' या second opinion चाहिए।",
-                JSONObject().put("question", str("GPT से पूछने वाला सवाल")), listOf("question")))
-            .put(tool("add_note", "एक note save करो।",
-                JSONObject().put("text", str("note का text")).put("tag", str("project/topic, जैसे BIT, Kathalok, TVF, personal")),
+            .put(tool("ask_gpt", "Ask OpenAI GPT a question, when Alok says 'ask GPT' or wants a second opinion.",
+                JSONObject().put("question", str("The question for GPT")), listOf("question")))
+            .put(tool("add_note", "Save a note.",
+                JSONObject().put("text", str("Note text")).put("tag", str("Project/topic, e.g. BIT, Kathalok, TVF, personal")),
                 listOf("text", "tag")))
-            .put(tool("search_notes", "Notes ढूँढो (query खाली = हाल के सारे notes)।",
-                JSONObject().put("query", str("ढूँढने का शब्द या tag")), listOf("query")))
-            .put(tool("add_todo", "To-do list में task जोड़ो।",
-                JSONObject().put("list", str("list का नाम: tvf, kathalok, personal, shopping या कोई और"))
+            .put(tool("search_notes", "Search notes (empty query = recent notes).",
+                JSONObject().put("query", str("Search word or tag")), listOf("query")))
+            .put(tool("add_todo", "Add a task to a to-do list.",
+                JSONObject().put("list", str("List name: tvf, kathalok, personal, shopping or other"))
                     .put("text", str("task")).put("due", str("deadline, optional")),
                 listOf("list", "text")))
-            .put(tool("list_todos", "Pending tasks दिखाओ।",
-                JSONObject().put("list", str("list का नाम, या खाली = सारी lists"))
+            .put(tool("list_todos", "List pending tasks.",
+                JSONObject().put("list", str("List name, or empty for all lists"))
                     .put("include_done", JSONObject().put("type", "boolean")),
                 listOf()))
-            .put(tool("complete_todo", "Task को done mark करो।",
+            .put(tool("complete_todo", "Mark a task as done.",
                 JSONObject().put("id", JSONObject().put("type", "integer")), listOf("id")))
-            .put(tool("set_reminder", "किसी समय पर reminder लगाओ (notification + Jarvis की आवाज़)।",
-                JSONObject().put("text", str("किस बात का reminder"))
-                    .put("datetime", str("ISO local datetime, जैसे 2026-11-24T09:00")),
+            .put(tool("set_reminder", "Set a reminder at a time (notification + spoken by Jarvis).",
+                JSONObject().put("text", str("What to remind about"))
+                    .put("datetime", str("ISO local datetime, e.g. 2026-11-24T09:00")),
                 listOf("text", "datetime")))
-            .put(tool("add_custom_rule", "Alok का कोई नया नियम/preference हमेशा के लिए याद रखो (जैसे 'shoot mode' का मतलब)।",
-                JSONObject().put("rule", str("नियम, Alok के शब्दों में")), listOf("rule")))
+            .put(tool("add_custom_rule", "Permanently remember a new rule/preference from Alok (e.g. what 'shoot mode' means).",
+                JSONObject().put("rule", str("The rule, in Alok's words")), listOf("rule")))
     }
 
     private fun runTool(name: String, input: JSONObject): String = try {
@@ -85,7 +85,7 @@ $rules
             "set_reminder" -> Reminders.schedule(context, input.getString("text"), input.getString("datetime"))
             "add_custom_rule" -> {
                 settings.customRules = (settings.customRules + "\n- " + input.getString("rule")).trim()
-                "नियम save हो गया"
+                "Rule saved"
             }
             else -> "Unknown tool $name"
         }
@@ -95,7 +95,7 @@ $rules
 
     /** User की बात लो, Claude से जवाब लाओ (tools चलाते हुए)। Background thread पर call करें। */
     fun ask(userText: String): String {
-        if (settings.anthropicKey.isBlank()) return "Sir, पहले settings में Anthropic API key डालिए।"
+        if (settings.anthropicKey.isBlank()) return "Sir, please add the Anthropic API key in Setup first."
         history.put(JSONObject().put("role", "user").put("content", userText))
 
         repeat(8) {   // ज़्यादा से ज़्यादा 8 tool rounds
@@ -119,7 +119,7 @@ $rules
                     val b = content.getJSONObject(i)
                     if (b.optString("type") == "text") sb.append(b.getString("text")).append(' ')
                 }
-                return sb.toString().trim().ifBlank { "हो गया।" }
+                return sb.toString().trim().ifBlank { "Done, Sir." }
             }
 
             val results = JSONArray()
@@ -133,11 +133,11 @@ $rules
             }
             history.put(JSONObject().put("role", "user").put("content", results))
         }
-        return "Sir, ये काम थोड़ा उलझ गया, एक बार फिर से बोलिए।"
+        return "Sir, that got a bit tangled. Could you say it again?"
     }
 
     private fun askGpt(question: String): String {
-        if (settings.openaiKey.isBlank()) return "OpenAI API key settings में नहीं है"
+        if (settings.openaiKey.isBlank()) return "OpenAI API key is not set"
         val body = JSONObject()
             .put("model", settings.gptModel)
             .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", question)))
