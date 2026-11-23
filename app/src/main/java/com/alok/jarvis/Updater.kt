@@ -26,7 +26,7 @@ object Updater {
         a.packageManager.getPackageInfo(a.packageName, 0).longVersionCode
 
     /** silent = true: सिर्फ़ update मिलने पर ही dialog दिखाओ */
-    fun check(a: Activity, silent: Boolean) {
+    fun check(a: Activity, silent: Boolean, onAvailable: ((Long) -> Unit)? = null) {
         Thread {
             try {
                 val c = URL(LATEST).openConnection() as HttpURLConnection
@@ -46,6 +46,7 @@ object Updater {
                 main.post {
                     if (a.isFinishing) return@post
                     if (latest > cur && url != null) {
+                        onAvailable?.invoke(latest)
                         AlertDialog.Builder(a)
                             .setTitle("UPDATE AVAILABLE")
                             .setMessage("Build $latest is ready (you have build $cur).\nDownload and install now?")
