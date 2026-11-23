@@ -17,7 +17,7 @@ import android.widget.Toast
  * One-tap setup: opens the key page, user taps Copy, comes back —
  * Jarvis reads the clipboard and saves the key automatically.
  */
-class QuickSetupActivity : Activity() {
+class QuickSetupActivity : SecureActivity() {
     private lateinit var s: Settings
     private lateinit var gemStatus: TextView
     private fun dp(v: Float) = Ui.dp(this, v)
@@ -59,7 +59,7 @@ class QuickSetupActivity : Activity() {
         gemStatus = mono("", 11f, Ui.MUTED, bold = true).apply { setPadding(0, dp(8f), 0, dp(22f)) }
         col.addView(gemStatus)
 
-        col.addView(mono("Wake word \"Hey Jarvis\" is built in — nothing else to set up.", 10f, Ui.MUTED).apply {
+        col.addView(mono("Wake word \"Jarvis\" is built in — nothing else to set up.", 10f, Ui.MUTED).apply {
             setPadding(0, 0, 0, dp(18f)); setLineSpacing(0f, 1.25f)
         })
 
@@ -82,7 +82,7 @@ class QuickSetupActivity : Activity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
+        if (hasFocus && AppLock.isUnlocked) {
             when (KeyGrabber.grab(this)) {
                 "gemini" -> Toast.makeText(this, "Gemini key saved ✓", Toast.LENGTH_SHORT).show()
             }
@@ -106,7 +106,11 @@ object KeyGrabber {
             val text = cm.primaryClip?.getItemAt(0)?.coerceToText(a)?.toString()?.trim() ?: return null
             val s = Settings(a)
             when {
-                GEMINI.matches(text) && text != s.geminiKey -> { s.geminiKey = text; "gemini" }
+                GEMINI.matches(text) && text != s.geminiKey -> {
+                    s.geminiKey = text
+                    try { cm.clearPrimaryClip() } catch (_: Exception) {}   // don't leave the key in the clipboard
+                    "gemini"
+                }
                 else -> null
             }
         } catch (e: Exception) { null }
