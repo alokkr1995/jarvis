@@ -20,7 +20,6 @@ import android.widget.Toast
 class QuickSetupActivity : Activity() {
     private lateinit var s: Settings
     private lateinit var gemStatus: TextView
-    private lateinit var picoStatus: TextView
     private fun dp(v: Float) = Ui.dp(this, v)
 
     private fun mono(t: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
@@ -60,16 +59,9 @@ class QuickSetupActivity : Activity() {
         gemStatus = mono("", 11f, Ui.MUTED, bold = true).apply { setPadding(0, dp(8f), 0, dp(22f)) }
         col.addView(gemStatus)
 
-        // Step 2 — Picovoice (optional)
-        col.addView(mono("// STEP 2 — WAKE WORD \"JARVIS\" (FREE, OPTIONAL)", 11f, Ui.CYAN, bold = true))
-        col.addView(mono("Skip this and you can still talk by tapping the core.\nOpens Picovoice → sign in → tap COPY next to AccessKey → come back.", 10f, Ui.MUTED).apply {
-            setPadding(0, dp(4f), 0, dp(8f)); setLineSpacing(0f, 1.25f)
+        col.addView(mono("Wake word \"Hey Jarvis\" is built in — nothing else to set up.", 10f, Ui.MUTED).apply {
+            setPadding(0, 0, 0, dp(18f)); setLineSpacing(0f, 1.25f)
         })
-        col.addView(bigButton("GET FREE WAKE-WORD KEY", Ui.AMBER) {
-            open("https://console.picovoice.ai/")
-        }, LinearLayout.LayoutParams(MATCH_PARENT, dp(54f)))
-        picoStatus = mono("", 11f, Ui.MUTED, bold = true).apply { setPadding(0, dp(8f), 0, dp(22f)) }
-        col.addView(picoStatus)
 
         col.addView(mono("DONE — START JARVIS", 13f, Ui.BG, bold = true).apply {
             gravity = Gravity.CENTER; letterSpacing = 0.12f
@@ -93,7 +85,6 @@ class QuickSetupActivity : Activity() {
         if (hasFocus) {
             when (KeyGrabber.grab(this)) {
                 "gemini" -> Toast.makeText(this, "Gemini key saved ✓", Toast.LENGTH_SHORT).show()
-                "picovoice" -> Toast.makeText(this, "Wake-word key saved ✓", Toast.LENGTH_SHORT).show()
             }
             refresh()
         }
@@ -102,15 +93,12 @@ class QuickSetupActivity : Activity() {
     private fun refresh() {
         gemStatus.text = if (s.geminiKey.isNotBlank()) "✓ GEMINI KEY SAVED" else "○ WAITING FOR KEY…"
         gemStatus.setTextColor(if (s.geminiKey.isNotBlank()) Ui.GREEN else Ui.MUTED)
-        picoStatus.text = if (s.picovoiceKey.isNotBlank()) "✓ WAKE-WORD KEY SAVED" else "○ OPTIONAL — NOT SET"
-        picoStatus.setTextColor(if (s.picovoiceKey.isNotBlank()) Ui.GREEN else Ui.MUTED)
     }
 }
 
 /** Reads the clipboard and saves any recognised key. Returns which key was saved, or null. */
 object KeyGrabber {
     private val GEMINI = Regex("^(AIza[0-9A-Za-z_\\-]{30,}|AQ\\.[0-9A-Za-z_\\-.]{30,})$")
-    private val PICO = Regex("^[A-Za-z0-9+/]{40,}={0,2}$")
 
     fun grab(a: Activity): String? {
         return try {
@@ -119,7 +107,6 @@ object KeyGrabber {
             val s = Settings(a)
             when {
                 GEMINI.matches(text) && text != s.geminiKey -> { s.geminiKey = text; "gemini" }
-                PICO.matches(text) && !text.startsWith("AIza") && !text.startsWith("AQ.") && text != s.picovoiceKey -> { s.picovoiceKey = text; "picovoice" }
                 else -> null
             }
         } catch (e: Exception) { null }
