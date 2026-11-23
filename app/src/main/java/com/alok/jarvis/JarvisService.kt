@@ -71,12 +71,12 @@ class JarvisService : Service() {
 
     private fun startAsForeground() {
         val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Jarvis listening", NotificationManager.IMPORTANCE_LOW))
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Jarvis online", NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val n = Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("Jarvis सुन रहा है")
-            .setContentText("बोलिए \"Jarvis\"")
+            .setContentTitle("Jarvis is online")
+            .setContentText("Say \"Jarvis\" or tap to open")
             .setContentIntent(open)
             .setOngoing(true)
             .build()
@@ -91,7 +91,7 @@ class JarvisService : Service() {
     private fun startWakeWord() {
         try {
             if (porcupine == null) {
-                if (settings.picovoiceKey.isBlank()) { log("Picovoice key नहीं है — settings में डालिए"); return }
+                if (settings.picovoiceKey.isBlank()) { log("Picovoice key missing — add it in Setup"); setState("error"); return }
                 porcupine = PorcupineManager.Builder()
                     .setAccessKey(settings.picovoiceKey)
                     .setKeyword(Porcupine.BuiltInKeyword.JARVIS)
@@ -100,7 +100,7 @@ class JarvisService : Service() {
             }
             porcupine?.start()
             setState("idle")
-            log("👂 \"Jarvis\" का इंतज़ार...")
+            log("Waiting for wake word")
         } catch (e: Exception) {
             log("Wake word error: ${e.message}")
             setState("error")
@@ -116,7 +116,7 @@ class JarvisService : Service() {
         inSession = true
         stopWakeWord()
         brain.resetSession()
-        log("⚡ जागा!")
+        log("Wake word detected")
         ToneGenerator(AudioManager.STREAM_MUSIC, 80).startTone(ToneGenerator.TONE_PROP_BEEP, 150)
         main.postDelayed({ listen() }, 350)
     }
@@ -132,10 +132,10 @@ class JarvisService : Service() {
                 if (text.isNullOrBlank()) endSession() else handleUserText(text)
             }
             override fun onError(error: Int) {
-                log("सुनाई नहीं दिया (code $error)")
+                log("No speech (code $error)")
                 endSession()
             }
-            override fun onReadyForSpeech(params: Bundle?) { setState("listening"); log("🎤 बोलिए...") }
+            override fun onReadyForSpeech(params: Bundle?) { setState("listening"); log("Listening") }
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
@@ -151,17 +151,17 @@ class JarvisService : Service() {
     }
 
     private fun handleUserText(text: String) {
-        log("आप: $text")
+        log("User: $text")
         chat(true, text)
         val lower = text.lowercase().trim()
         if (STOP_WORDS.any { lower == it || lower.endsWith(it) }) {
-            voice.speak("ठीक है Sir।") { endSession() }
+            voice.speak("Theek hai, Sir.") { endSession() }
             return
         }
         setState("thinking")
         Thread {
             val reply = try { brain.ask(text) } catch (e: Exception) {
-                log("Error: ${e.message}"); "Sir, अभी connection में दिक्कत है।"
+                log("Error: ${e.message}"); "Sir, I'm having trouble connecting right now."
             }
             main.post {
                 log("Jarvis: $reply")
@@ -195,7 +195,7 @@ class JarvisService : Service() {
         inSession = true
         stopWakeWord()
         setState("speaking")
-        chat(false, "⏰ Reminder: $text")
+        chat(false, "REMINDER: $text")
         voice.speak("Sir, reminder: $text") { inSession = false; startWakeWord() }
     }
 
