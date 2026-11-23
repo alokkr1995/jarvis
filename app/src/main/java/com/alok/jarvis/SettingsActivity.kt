@@ -31,8 +31,8 @@ class SettingsActivity : Activity() {
 
         val col = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18f), dp(16f), dp(18f), dp(40f))
-        }
+            }
+        Ui.applyInsets(col, dp(18f), dp(16f), dp(18f), dp(40f))
 
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         top.addView(mono("◀ BACK", 11f, Ui.CYAN, bold = true).apply {
