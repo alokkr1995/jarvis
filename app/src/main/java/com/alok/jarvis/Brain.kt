@@ -12,6 +12,7 @@ import java.util.Locale
  * GPT एक tool की तरह जुड़ा है ("GPT से पूछो...").
  */
 class Brain(private val context: Context) {
+    companion object { const val FALLBACK = "gemini-flash-lite-latest" }
     private val settings = Settings(context)
     private val store = Store(context)
     private val history = JSONArray()   // एक बातचीत (session) की history
@@ -153,14 +154,25 @@ $rules
         }
         gHistory.put(JSONObject().put("role", "user")
             .put("parts", JSONArray().put(JSONObject().put("text", userText))))
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/${settings.geminiModel}:generateContent"
+        var model = settings.geminiModel
 
         repeat(8) {
             val body = JSONObject()
                 .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", systemPrompt()))))
                 .put("contents", gHistory)
                 .put("tools", JSONArray().put(JSONObject().put("functionDeclarations", decls)))
-            val resp = Http.postJson(url, mapOf("x-goog-api-key" to settings.geminiKey), body)
+            val resp = try {
+                Http.postJson("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent",
+                    mapOf("x-goog-api-key" to settings.geminiKey), body)
+            } catch (e: Exception) {
+                // Busy / quota / unknown model → fall back to the light model once
+                val m = e.message ?: ""
+                if (model != FALLBACK && (m.contains("HTTP 503") || m.contains("HTTP 429") || m.contains("HTTP 404"))) {
+                    model = FALLBACK
+                    Http.postJson("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent",
+                        mapOf("x-goog-api-key" to settings.geminiKey), body)
+                } else throw e
+            }
             val cands = resp.optJSONArray("candidates")
             if (cands == null || cands.length() == 0) return "Sir, Gemini didn't return an answer. Try again."
             val content = cands.getJSONObject(0).optJSONObject("content")
