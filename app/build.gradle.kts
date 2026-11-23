@@ -16,6 +16,7 @@ android {
         targetSdk = 35
         versionCode = buildNumber
         versionName = "1.$buildNumber"
+        ndk { abiFilters += listOf("arm64-v8a") }   // S26 Ultra; keeps the APK small
     }
 
     // एक ही key से sign — key GitHub Secret से आती है (repo में नहीं)
@@ -43,6 +44,6 @@ android {
 }
 
 dependencies {
-    implementation("ai.picovoice:porcupine-android:3.0.3")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
     implementation("androidx.core:core:1.13.1")
 }
