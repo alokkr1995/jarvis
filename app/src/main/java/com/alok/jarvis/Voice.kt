@@ -40,7 +40,7 @@ class Voice(private val context: Context) {
                 f.writeBytes(audio)
                 main.post { playFile(f, onDone) }
             } catch (e: Exception) {
-                JarvisService.log("ElevenLabs error, फ़ोन की आवाज़ इस्तेमाल: ${e.message}")
+                JarvisService.log("ElevenLabs error, using phone voice: ${e.message}")
                 main.post { speakFallback(text, onDone) }
             }
         }.start()
