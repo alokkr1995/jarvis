@@ -37,6 +37,15 @@ jobs:
           fi
           echo "$JARVIS_KEYSTORE" | base64 -d > app/jarvis.keystore
 
+      - name: Download free wake-word models (openWakeWord)
+        run: |
+          mkdir -p app/src/main/assets
+          base=https://github.com/dscripka/openWakeWord/releases/download/v0.5.1
+          curl -fsSL -o app/src/main/assets/melspectrogram.onnx $base/melspectrogram.onnx
+          curl -fsSL -o app/src/main/assets/embedding_model.onnx $base/embedding_model.onnx
+          curl -fsSL -o app/src/main/assets/hey_jarvis.onnx $base/hey_jarvis_v0.1.onnx
+          ls -la app/src/main/assets
+
       - name: Build APK
         run: gradle assembleDebug --stacktrace
 
