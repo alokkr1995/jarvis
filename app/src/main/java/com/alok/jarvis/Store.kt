@@ -50,7 +50,7 @@ class Store(context: Context) {
                 n.getString("tag").lowercase().contains(q)) out.put(n)
             if (out.length() >= 20) break
         }
-        return if (out.length() == 0) "कोई note नहीं मिला" else out.toString()
+        return if (out.length() == 0) "No notes found" else out.toString()
     }
 
     @Synchronized
@@ -75,7 +75,7 @@ class Store(context: Context) {
             if (!list.isNullOrBlank() && t.getString("list") != list.lowercase()) continue
             out.put(t)
         }
-        return if (out.length() == 0) "कोई pending task नहीं" else out.toString()
+        return if (out.length() == 0) "No pending tasks" else out.toString()
     }
 
     @Synchronized
@@ -88,6 +88,6 @@ class Store(context: Context) {
                 t.put("done", true); save(o); return "Task #$id done: ${t.getString("text")}"
             }
         }
-        return "Task #$id नहीं मिला"
+        return "Task #$id not found"
     }
 }
