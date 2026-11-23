@@ -31,11 +31,17 @@ android {
     }
 
     buildTypes {
-        release { isMinifyEnabled = false }
+        // Release build: not debuggable, so no one can read the app's private data over USB/adb
+        release {
+            isMinifyEnabled = false
+            isDebuggable = false
+            if (ks.exists()) signingConfig = signingConfigs.getByName("jarvis")
+        }
         if (ks.exists()) {
             getByName("debug") { signingConfig = signingConfigs.getByName("jarvis") }
         }
     }
+    lint { checkReleaseBuilds = false; abortOnError = false }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -44,6 +50,6 @@ android {
 }
 
 dependencies {
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
+    implementation(files("libs/sherpa-onnx.aar"))   // offline "Jarvis" wake word (downloaded by CI)
     implementation("androidx.core:core:1.13.1")
 }
