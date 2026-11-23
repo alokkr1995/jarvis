@@ -91,7 +91,7 @@ class JarvisService : Service() {
     private fun startWakeWord() {
         try {
             if (porcupine == null) {
-                if (settings.picovoiceKey.isBlank()) { log("Picovoice key missing — add it in Setup"); setState("error"); return }
+                if (settings.picovoiceKey.isBlank()) { log("No wake-word key — tap the core to talk"); setState("idle"); return }
                 porcupine = PorcupineManager.Builder()
                     .setAccessKey(settings.picovoiceKey)
                     .setKeyword(Porcupine.BuiltInKeyword.JARVIS)
