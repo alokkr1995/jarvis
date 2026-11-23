@@ -15,6 +15,7 @@ class Brain(private val context: Context) {
     companion object { const val FALLBACK = "gemini-flash-lite-latest" }
     private val settings = Settings(context)
     private val store = Store(context)
+    private val phone = Phone(context)
     private val history = JSONArray()   // एक बातचीत (session) की history
 
     private val gHistory = JSONArray()  // Gemini session history
@@ -32,9 +33,14 @@ ${settings.personality}
 
 Current time: $now (India).
 
-Use tools when needed: notes, to-do lists, reminders, asking GPT, remembering custom rules.
+You can control Alok's phone with tools: open apps, call people, send SMS, send WhatsApp messages,
+set alarms, torch, YouTube search, Google Maps navigation. Also notes, to-do lists, reminders, asking GPT,
+remembering custom rules. When Alok asks for one of these, just do it with the tool (no need to ask permission),
+then confirm in one short sentence. Contact names: pass them in English/Roman letters as they'd be saved in the phone
+(e.g. "राहुल" → "Rahul", "मम्मी" → "Mummy"). If a tool says several contacts match, ask which one.
+Write messages exactly in the words/language Alok wants to send.
 For reminders always pass datetime in ISO format, e.g. 2026-11-24T09:00.
-If asked for something you can't do yet (WhatsApp, calendar, calls), say clearly that it's coming in the next update.
+Calendar, Gmail and meeting recording are coming in a later update — say so if asked.
 
 Alok's custom rules:
 $rules
@@ -72,6 +78,26 @@ $rules
                 JSONObject().put("text", str("What to remind about"))
                     .put("datetime", str("ISO local datetime, e.g. 2026-11-24T09:00")),
                 listOf("text", "datetime")))
+            .put(tool("open_app", "Open an installed app on the phone (WhatsApp, Instagram, Camera, Spotify...).",
+                JSONObject().put("name", str("App name as shown on the phone")), listOf("name")))
+            .put(tool("call", "Phone call to a contact or number.",
+                JSONObject().put("contact", str("Contact name in Roman letters, or a phone number")), listOf("contact")))
+            .put(tool("send_sms", "Send an SMS text message.",
+                JSONObject().put("contact", str("Contact name in Roman letters, or a phone number"))
+                    .put("message", str("Message text")), listOf("contact", "message")))
+            .put(tool("send_whatsapp", "Send a WhatsApp message to a contact.",
+                JSONObject().put("contact", str("Contact name in Roman letters, or a phone number"))
+                    .put("message", str("Message text")), listOf("contact", "message")))
+            .put(tool("set_alarm", "Set an alarm in the phone's clock app.",
+                JSONObject().put("hour", JSONObject().put("type", "integer").put("description", "0-23"))
+                    .put("minute", JSONObject().put("type", "integer")).put("label", str("Alarm label, optional")),
+                listOf("hour", "minute")))
+            .put(tool("torch", "Turn the flashlight on or off.",
+                JSONObject().put("on", JSONObject().put("type", "boolean")), listOf("on")))
+            .put(tool("youtube", "Search / play something on YouTube.",
+                JSONObject().put("query", str("What to search")), listOf("query")))
+            .put(tool("navigate", "Start Google Maps navigation to a place.",
+                JSONObject().put("place", str("Destination")), listOf("place")))
             .put(tool("add_custom_rule", "Permanently remember a new rule/preference from Alok (e.g. what 'shoot mode' means).",
                 JSONObject().put("rule", str("The rule, in Alok's words")), listOf("rule")))
     }
@@ -87,6 +113,14 @@ $rules
                 input.optBoolean("include_done", false))
             "complete_todo" -> store.completeTodo(input.getInt("id"))
             "set_reminder" -> Reminders.schedule(context, input.getString("text"), input.getString("datetime"))
+            "open_app" -> phone.openApp(input.getString("name"))
+            "call" -> phone.call(input.getString("contact"))
+            "send_sms" -> phone.sms(input.getString("contact"), input.getString("message"))
+            "send_whatsapp" -> phone.whatsapp(input.getString("contact"), input.getString("message"))
+            "set_alarm" -> phone.alarm(input.getInt("hour"), input.optInt("minute", 0), input.optString("label", ""))
+            "torch" -> phone.torch(input.optBoolean("on", true))
+            "youtube" -> phone.youtube(input.getString("query"))
+            "navigate" -> phone.maps(input.getString("place"))
             "add_custom_rule" -> {
                 settings.customRules = (settings.customRules + "\n- " + input.getString("rule")).trim()
                 "Rule saved"
@@ -101,7 +135,7 @@ $rules
     fun ask(userText: String): String {
         if (settings.anthropicKey.isBlank()) {
             if (settings.geminiKey.isNotBlank()) return askGemini(userText)
-            return "Sir, please add a Gemini or Anthropic key in Setup first."
+            return "सर, पहले Setup में Gemini key डाल दीजिए।"
         }
         history.put(JSONObject().put("role", "user").put("content", userText))
 
@@ -126,7 +160,7 @@ $rules
                     val b = content.getJSONObject(i)
                     if (b.optString("type") == "text") sb.append(b.getString("text")).append(' ')
                 }
-                return sb.toString().trim().ifBlank { "Done, Sir." }
+                return sb.toString().trim().ifBlank { "हो गया सर।" }
             }
 
             val results = JSONArray()
@@ -140,7 +174,7 @@ $rules
             }
             history.put(JSONObject().put("role", "user").put("content", results))
         }
-        return "Sir, that got a bit tangled. Could you say it again?"
+        return "सर, बात थोड़ी उलझ गई, एक बार फिर बोलिए।"
     }
 
     /** Free brain: Google Gemini with function calling */
@@ -154,7 +188,7 @@ $rules
         }
         gHistory.put(JSONObject().put("role", "user")
             .put("parts", JSONArray().put(JSONObject().put("text", userText))))
-        var model = settings.geminiModel
+        var model = settings.geminiModel.let { if (it == FALLBACK) "gemini-flash-latest" else it }
 
         repeat(8) {
             val body = JSONObject()
@@ -174,9 +208,9 @@ $rules
                 } else throw e
             }
             val cands = resp.optJSONArray("candidates")
-            if (cands == null || cands.length() == 0) return "Sir, Gemini didn't return an answer. Try again."
+            if (cands == null || cands.length() == 0) return "सर, जवाब नहीं आया, एक बार फिर बोलिए।"
             val content = cands.getJSONObject(0).optJSONObject("content")
-                ?: return "Sir, Gemini didn't return an answer. Try again."
+                ?: return "सर, जवाब नहीं आया, एक बार फिर बोलिए।"
             if (!content.has("role")) content.put("role", "model")
             gHistory.put(content)
             val parts = content.optJSONArray("parts") ?: JSONArray()
@@ -196,10 +230,10 @@ $rules
                     sb.append(part.getString("text")).append(' ')
                 }
             }
-            if (responses.length() == 0) return sb.toString().trim().ifBlank { "Done, Sir." }
+            if (responses.length() == 0) return sb.toString().trim().ifBlank { "हो गया सर।" }
             gHistory.put(JSONObject().put("role", "user").put("parts", responses))
         }
-        return "Sir, that got a bit tangled. Could you say it again?"
+        return "सर, बात थोड़ी उलझ गई, एक बार फिर बोलिए।"
     }
 
     private fun askGpt(question: String): String {
