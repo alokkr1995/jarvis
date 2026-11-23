@@ -209,7 +209,11 @@ class MainActivity : Activity() {
         JarvisService.chatListener = { u, t -> addBubble(u, t) }
         render(if (JarvisService.instance == null) "off" else JarvisService.currentState)
         main.post(ticker)
-        if (!updateChecked) { updateChecked = true; Updater.check(this, silent = true) }
+        if (!updateChecked) {
+            updateChecked = true
+            Updater.check(this, silent = true)
+            if (!Settings(this).hasBrain) startActivity(Intent(this, QuickSetupActivity::class.java))
+        }
     }
 
     override fun onPause() {
@@ -219,10 +223,18 @@ class MainActivity : Activity() {
         super.onPause()
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) when (KeyGrabber.grab(this)) {
+            "gemini" -> toast("Gemini key saved ✓")
+            "picovoice" -> toast("Wake-word key saved ✓ — restart Jarvis")
+        }
+    }
+
     private fun render(s: String) {
         orb.state = s
         status.text = when (s) {
-            "idle" -> "ONLINE — LISTENING FOR \"JARVIS\""
+            "idle" -> if (Settings(this).picovoiceKey.isBlank()) "ONLINE — TAP THE CORE TO TALK" else "ONLINE — LISTENING FOR \"JARVIS\""
             "listening" -> "GO AHEAD, SIR"
             "thinking" -> "PROCESSING…"
             "speaking" -> "RESPONDING…"
@@ -273,7 +285,7 @@ class MainActivity : Activity() {
 
     private fun onModuleTap(m: String) {
         when (m) {
-            "SETUP" -> startActivity(Intent(this, SettingsActivity::class.java))
+            "SETUP" -> startActivity(Intent(this, if (Settings(this).hasBrain) SettingsActivity::class.java else QuickSetupActivity::class.java))
             "UPDATE" -> { toast("Checking for updates…"); Updater.check(this, silent = false) }
             "NOTES" -> ask("Read me my most recent notes, briefly.")
             "TASKS" -> ask("What are my pending tasks?")
@@ -297,9 +309,8 @@ class MainActivity : Activity() {
             askPermissions(); toast("Microphone permission is required"); return
         }
         val s = Settings(this)
-        if (!s.hasBrain || s.picovoiceKey.isBlank()) {
-            toast("Add your Picovoice key and a Gemini (free) key in SETUP first")
-            startActivity(Intent(this, SettingsActivity::class.java)); return
+        if (!s.hasBrain) {
+            startActivity(Intent(this, QuickSetupActivity::class.java)); return
         }
         startForegroundService(Intent(this, JarvisService::class.java))
         orb.postDelayed({ render(JarvisService.currentState) }, 600)
