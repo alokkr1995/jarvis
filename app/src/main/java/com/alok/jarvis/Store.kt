@@ -6,19 +6,28 @@ import org.json.JSONObject
 import java.io.File
 
 /**
- * Notes और to-do lists फ़ोन में एक JSON file में रहते हैं।
+ * Notes और to-do lists फ़ोन में एक encrypted file में रहते हैं।
  * (Phase 3 में इन्हें Google Drive / Google Tasks से sync करेंगे।)
  */
 class Store(context: Context) {
-    private val file = File(context.filesDir, "jarvis_data.json")
+    private val file = File(context.filesDir, "jarvis_data.bin")
+    private val legacy = File(context.filesDir, "jarvis_data.json")   // old plain-text file
 
     @Synchronized
-    private fun load(): JSONObject =
-        if (file.exists()) JSONObject(file.readText())
-        else JSONObject().put("notes", JSONArray()).put("todos", JSONArray()).put("next_id", 1)
+    private fun load(): JSONObject {
+        if (legacy.exists()) {   // migrate once to the encrypted file, then wipe the plain copy
+            val o = try { JSONObject(legacy.readText()) } catch (_: Exception) { null }
+            if (o != null) save(o)
+            legacy.writeBytes(ByteArray(legacy.length().toInt()))
+            legacy.delete()
+        }
+        val text = if (file.exists()) Crypto.readFile(file) else null
+        return text?.let { try { JSONObject(it) } catch (_: Exception) { null } }
+            ?: JSONObject().put("notes", JSONArray()).put("todos", JSONArray()).put("next_id", 1)
+    }
 
     @Synchronized
-    private fun save(o: JSONObject) = file.writeText(o.toString(2))
+    private fun save(o: JSONObject) = Crypto.writeFile(file, o.toString())
 
     @Synchronized
     private fun nextId(o: JSONObject): Int {
