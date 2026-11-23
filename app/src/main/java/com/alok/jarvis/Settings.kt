@@ -39,6 +39,11 @@ class Settings(context: Context) {
         get() = p.getString("voice_id", "JBFqnCBsd6RMkjVDRZzb") ?: ""
         set(v) = p.edit().putString("voice_id", v.trim()).apply()
 
+    /** Phone (Google TTS) voice name used when there is no ElevenLabs key. Empty = auto (male Hindi). */
+    var ttsVoice: String
+        get() = p.getString("tts_voice", "") ?: ""
+        set(v) = p.edit().putString("tts_voice", v.trim()).apply()
+
     var claudeModel: String
         get() = p.getString("claude_model", "claude-sonnet-5-5") ?: ""
         set(v) = p.edit().putString("claude_model", v.trim()).apply()
@@ -54,12 +59,16 @@ class Settings(context: Context) {
 
     /** 0.0 – 1.0 : ज़्यादा = आसानी से जागेगा, पर गलती से भी जाग सकता है */
     var sensitivity: Float
-        get() = p.getFloat("sensitivity", 0.6f)
+        get() = p.getFloat("sensitivity", 0.5f)
         set(v) = p.edit().putFloat("sensitivity", v.coerceIn(0f, 1f)).apply()
 
     /** Jarvis का स्वभाव — आप जो चाहें लिखें, system prompt में जुड़ जाएगा */
     var personality: String
-        get() = p.getString("personality", DEFAULT_PERSONALITY) ?: DEFAULT_PERSONALITY
+        get() {
+            val v = p.getString("personality", null)
+            // Old default asked for Roman-script Hinglish (sounds bad when spoken) → use the new default
+            return if (v == null || v.isBlank() || v.contains("never Devanagari")) DEFAULT_PERSONALITY else v
+        }
         set(v) = p.edit().putString("personality", v).apply()
 
     /** बोलकर बनाए गए custom नियम ("जब मैं shoot mode बोलूँ तो...") */
@@ -71,7 +80,9 @@ class Settings(context: Context) {
         const val DEFAULT_PERSONALITY =
             "You are Jarvis, Alok's personal AI assistant. Alok is an Associate Creative Producer at TVF. " +
             "Speak like a calm, witty, highly capable butler-assistant. Address him as 'Sir' now and then. " +
-            "Alok often speaks Hindi or Hinglish; reply in natural Hinglish written in Roman (English) script, never Devanagari. " +
+            "Alok speaks Hindi or Hinglish. Reply in natural, clean, conversational Hindi written in Devanagari script " +
+            "(the way a polite educated Delhi/Mumbai person talks; common English words like meeting, phone, message, " +
+            "reminder are fine, but write them in Devanagari too). Never use Roman-script Hindi. " +
             "Keep replies short (1-3 sentences) because they are spoken aloud. No markdown, bullets or emoji."
     }
 }
