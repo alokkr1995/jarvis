@@ -1,30 +1,44 @@
 package com.alok.jarvis
 
-import ai.onnxruntime.OnnxTensor
-import ai.onnxruntime.OrtEnvironment
-import ai.onnxruntime.OrtSession
 import android.annotation.SuppressLint
 import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import java.nio.FloatBuffer
+import com.k2fsa.sherpa.onnx.FeatureConfig
+import com.k2fsa.sherpa.onnx.KeywordSpotter
+import com.k2fsa.sherpa.onnx.KeywordSpotterConfig
+import com.k2fsa.sherpa.onnx.OnlineModelConfig
+import com.k2fsa.sherpa.onnx.OnlineTransducerModelConfig
 
 /**
- * Free, offline "Hey Jarvis" wake word (openWakeWord models, no account / key needed).
- * Pipeline per 80 ms of 16 kHz audio: melspectrogram → speech embedding → wake-word classifier.
+ * Free, offline wake word "Jarvis" (sherpa-onnx keyword spotter, runs fully on the phone,
+ * no account or key; audio never leaves the device).
  */
-class WakeWord(context: Context, private val threshold: Float, private val onWake: () -> Unit) {
-    private val env = OrtEnvironment.getEnvironment()
-    private val mel = load(context, "melspectrogram.onnx")
-    private val emb = load(context, "embedding_model.onnx")
-    private val ww = load(context, "hey_jarvis.onnx")
+class WakeWord(context: Context, sensitivity: Float, private val onWake: () -> Unit) {
+    private val spotter: KeywordSpotter = KeywordSpotter(
+        context.assets,
+        KeywordSpotterConfig(
+            featConfig = FeatureConfig(sampleRate = 16000, featureDim = 80),
+            modelConfig = OnlineModelConfig(
+                transducer = OnlineTransducerModelConfig(
+                    encoder = "kws/encoder.onnx",
+                    decoder = "kws/decoder.onnx",
+                    joiner = "kws/joiner.onnx",
+                ),
+                tokens = "kws/tokens.txt",
+                numThreads = 1,
+                modelType = "zipformer2",
+            ),
+            keywordsFile = "kws/keywords.txt",
+            keywordsScore = 2.0f,
+            // sensitivity 0.5 → threshold 0.20 ; higher sensitivity = lower threshold
+            keywordsThreshold = (0.45f - 0.5f * sensitivity).coerceIn(0.05f, 0.40f),
+        )
+    )
 
     @Volatile private var running = false
     private var thread: Thread? = null
-
-    private fun load(c: Context, file: String): OrtSession =
-        env.createSession(c.assets.open(file).use { it.readBytes() }, OrtSession.SessionOptions())
 
     fun start() {
         if (running) return
@@ -41,23 +55,13 @@ class WakeWord(context: Context, private val threshold: Float, private val onWak
 
     fun close() {
         stop()
-        try { mel.close(); emb.close(); ww.close() } catch (_: Exception) {}
-    }
-
-    private fun run1(s: OrtSession, data: FloatArray, shape: LongArray): FloatArray {
-        OnnxTensor.createTensor(env, FloatBuffer.wrap(data), shape).use { t ->
-            s.run(mapOf(s.inputNames.first() to t)).use { r ->
-                val fb = (r.get(0) as OnnxTensor).floatBuffer
-                return FloatArray(fb.remaining()).also { fb.get(it) }
-            }
-        }
+        try { spotter.release() } catch (_: Exception) {}
     }
 
     @SuppressLint("MissingPermission")
     private fun loop() {
         val sr = 16000
-        val chunk = 1280                       // 80 ms
-        val keep = 480                         // 3 extra mel hops of context
+        val chunk = 1600                       // 100 ms
         val minBuf = AudioRecord.getMinBufferSize(sr, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         val rec = try {
             AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, sr, AudioFormat.CHANNEL_IN_MONO,
@@ -66,55 +70,36 @@ class WakeWord(context: Context, private val threshold: Float, private val onWak
         if (rec.state != AudioRecord.STATE_INITIALIZED) {
             JarvisService.log("Mic is busy"); rec.release(); running = false; return
         }
-
+        val stream = spotter.createStream()
         val pcm = ShortArray(chunk)
-        val raw = FloatArray(chunk + keep)
-        var rawLen = 0
-        val melBuf = ArrayDeque<FloatArray>()
-        repeat(76) { melBuf.addLast(FloatArray(32) { 1f }) }
-        val feats = ArrayDeque<FloatArray>()
-        val melFlat = FloatArray(76 * 32)
-        val featFlat = FloatArray(16 * 96)
-
+        val samples = FloatArray(chunk)
         try {
             rec.startRecording()
             while (running) {
-                var got = 0
-                while (got < chunk && running) {
-                    val n = rec.read(pcm, got, chunk - got)
-                    if (n < 0) { JarvisService.log("Mic read error $n"); running = false; break }
-                    got += n
-                }
-                if (got < chunk) break
-
-                System.arraycopy(raw, chunk, raw, 0, keep)
-                for (i in 0 until chunk) raw[keep + i] = pcm[i].toFloat()
-                rawLen = minOf(raw.size, rawLen + chunk)
-                val input = raw.copyOfRange(raw.size - rawLen, raw.size)
-
-                val m = run1(mel, input, longArrayOf(1, input.size.toLong()))
-                for (f in 0 until m.size / 32) melBuf.addLast(FloatArray(32) { m[f * 32 + it] / 10f + 2f })
-                while (melBuf.size > 76) melBuf.removeFirst()
-                melBuf.forEachIndexed { i, fr -> System.arraycopy(fr, 0, melFlat, i * 32, 32) }
-
-                feats.addLast(run1(emb, melFlat, longArrayOf(1, 76, 32, 1)))
-                while (feats.size > 16) feats.removeFirst()
-                if (feats.size < 16) continue
-                feats.forEachIndexed { i, v -> System.arraycopy(v, 0, featFlat, i * 96, 96) }
-
-                val score = run1(ww, featFlat, longArrayOf(1, 16, 96))[0]
-                if (score >= threshold) {
-                    running = false
-                    JarvisService.log("Wake word (score ${"%.2f".format(score)})")
-                    onWake()
+                val n = rec.read(pcm, 0, chunk)
+                if (n < 0) { JarvisService.log("Mic read error $n"); break }
+                if (n == 0) continue
+                for (i in 0 until n) samples[i] = pcm[i] / 32768f
+                stream.acceptWaveform(if (n == chunk) samples else samples.copyOf(n), sr)
+                while (running && spotter.isReady(stream)) {
+                    spotter.decode(stream)
+                    val kw = spotter.getResult(stream).keyword
+                    if (kw.isNotBlank()) {
+                        spotter.reset(stream)
+                        running = false
+                        JarvisService.log("Wake word: $kw")
+                        onWake()
+                        break
+                    }
                 }
             }
         } catch (e: Exception) {
             JarvisService.log("Wake word error: ${e.message}")
-            running = false
         } finally {
+            running = false
             try { rec.stop() } catch (_: Exception) {}
             rec.release()
+            try { stream.release() } catch (_: Exception) {}
         }
     }
 }
