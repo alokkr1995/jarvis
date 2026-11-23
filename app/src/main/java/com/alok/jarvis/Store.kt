@@ -79,6 +79,16 @@ class Store(context: Context) {
     }
 
     @Synchronized
+    fun pendingCount(): Int {
+        val todos = load().getJSONArray("todos"); var n = 0
+        for (i in 0 until todos.length()) if (!todos.getJSONObject(i).getBoolean("done")) n++
+        return n
+    }
+
+    @Synchronized
+    fun notesCount(): Int = load().getJSONArray("notes").length()
+
+    @Synchronized
     fun completeTodo(id: Int): String {
         val o = load()
         val todos = o.getJSONArray("todos")
