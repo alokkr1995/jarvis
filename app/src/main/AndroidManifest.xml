@@ -7,6 +7,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
 
@@ -18,7 +19,8 @@
 
     <application
         android:label="@string/app_name"
-        android:icon="@android:drawable/ic_btn_speak_now"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:allowBackup="false">
 
@@ -41,6 +43,16 @@
             android:name=".JarvisService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.alok.jarvis.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <receiver
             android:name=".ReminderReceiver"
