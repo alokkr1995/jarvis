@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings as AndroidSettings
+import android.speech.tts.TextToSpeech
 import android.text.InputType
 import android.view.Gravity
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -16,6 +17,11 @@ import android.widget.Toast
 
 /** Setup: keys, voice, language, models, personality, custom rules */
 class SettingsActivity : Activity() {
+    private var tts: TextToSpeech? = null
+    private val refreshers = mutableListOf<() -> Unit>()
+
+    override fun onResume() { super.onResume(); refreshers.forEach { it() } }
+    override fun onDestroy() { tts?.shutdown(); super.onDestroy() }
     private fun dp(v: Float) = Ui.dp(this, v)
 
     private fun mono(t: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
@@ -77,16 +83,60 @@ class SettingsActivity : Activity() {
         }
 
         val keys = section("API KEYS", "Stored only on this phone")
-        val pico = field(keys, "PICOVOICE ACCESS KEY  [wake word · required]", s.picovoiceKey, secret = true)
         val gem = field(keys, "GEMINI KEY  [brain · FREE · aistudio.google.com]", s.geminiKey, secret = true)
         val ant = field(keys, "ANTHROPIC KEY  [brain · paid · optional, used instead of Gemini]", s.anthropicKey, secret = true)
         val oai = field(keys, "OPENAI KEY  [GPT · optional]", s.openaiKey, secret = true)
         val ele = field(keys, "ELEVENLABS KEY  [voice · optional]", s.elevenKey, secret = true)
 
-        val voice = section("VOICE + LANGUAGE", "Change the ElevenLabs voice ID to change Jarvis's voice")
+        // ---- Phone control ----
+        val ctrl = section("PHONE CONTROL", "Lets Jarvis open apps, call and message for you")
+        fun ctrlButton(title: String, ok: () -> Boolean, open: () -> Unit) {
+            val b = mono("", 12f, Ui.TEXT, bold = true).apply {
+                setPadding(dp(4f), dp(14f), dp(4f), dp(14f))
+                setOnClickListener { open() }
+            }
+            fun refresh() { val y = ok(); b.text = (if (y) "✓  " else "○  ") + title + (if (y) "" else "  — tap to turn on"); b.setTextColor(if (y) Ui.GREEN else Ui.TEXT) }
+            refresh(); refreshers += { refresh() }
+            ctrl.addView(b)
+        }
+        ctrlButton("Allow app control (open apps / calls from background)",
+            { AndroidSettings.canDrawOverlays(this) }) {
+            startActivity(Intent(AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:$packageName")))
+        }
+        ctrlButton("WhatsApp auto-send (Accessibility → Jarvis)",
+            { AutoSend.isEnabled(this) }) {
+            Toast.makeText(this, "Installed apps → Jarvis WhatsApp auto-send → On", Toast.LENGTH_LONG).show()
+            startActivity(Intent(AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+        ctrl.addView(mono("If Samsung says \"Restricted setting\": App info → Jarvis → ⋮ (top right) → Allow restricted settings, then try again.", 10f, Ui.MUTED).apply {
+            setLineSpacing(0f, 1.25f); setPadding(dp(4f), dp(4f), dp(4f), 0)
+        })
+
+        // ---- Phone voice picker ----
+        val pv = section("JARVIS VOICE", "Free Google Hindi voice · tap to hear the next one")
+        val voiceBtn = mono("Loading voices…", 12f, Ui.TEXT, bold = true).apply { setPadding(dp(4f), dp(14f), dp(4f), dp(14f)) }
+        pv.addView(voiceBtn)
+        tts = TextToSpeech(this, TextToSpeech.OnInitListener { st ->
+            if (st != TextToSpeech.SUCCESS) { voiceBtn.text = "Google voice not available"; return@OnInitListener }
+            val t = tts ?: return@OnInitListener
+            t.setLanguage(java.util.Locale("hi", "IN"))
+            val list = Voice.hindiVoices(t)
+            if (list.isEmpty()) { voiceBtn.text = "No Hindi voice — install Hindi in Google TTS settings"; return@OnInitListener }
+            var idx = list.indexOfFirst { it.name == s.ttsVoice }.coerceAtLeast(0)
+            fun show() { voiceBtn.text = "▶  Voice ${idx + 1} of ${list.size}   (${list[idx].name})" }
+            show()
+            voiceBtn.setOnClickListener {
+                idx = (idx + 1) % list.size
+                s.ttsVoice = list[idx].name; show()
+                t.setVoice(list[idx]); t.setPitch(0.92f)
+                t.speak("नमस्ते सर, मैं जार्विस हूँ। बताइए, क्या करना है?", TextToSpeech.QUEUE_FLUSH, null, "test")
+            }
+        }, Voice.GOOGLE_TTS)
+
+        val voice = section("VOICE + LANGUAGE", "ElevenLabs is optional — without it Jarvis uses the Google voice above")
         val voiceId = field(voice, "ELEVENLABS VOICE ID", s.voiceId)
         val lang = field(voice, "SPEECH LANGUAGE  [hi-IN or en-IN]", s.language)
-        val sens = field(voice, "WAKE WORD SENSITIVITY  [0.0 – 1.0]", s.sensitivity.toString())
+        val sens = field(voice, "\"HEY JARVIS\" SENSITIVITY  [0.0 – 1.0 · higher wakes more easily]", s.sensitivity.toString())
 
         val brain = section("BRAIN", "Models and personality")
         val gmm = field(brain, "GEMINI MODEL", s.geminiModel)
@@ -99,11 +149,11 @@ class SettingsActivity : Activity() {
             gravity = Gravity.CENTER; letterSpacing = 0.12f
             background = Ui.HudPanel(this@SettingsActivity, Ui.CYAN, Ui.CYAN, Ui.TEXT, 10f)
             setOnClickListener {
-                s.picovoiceKey = pico.text.toString(); s.anthropicKey = ant.text.toString()
+                s.anthropicKey = ant.text.toString()
                 s.geminiKey = gem.text.toString(); s.geminiModel = gmm.text.toString()
                 s.openaiKey = oai.text.toString(); s.elevenKey = ele.text.toString()
                 s.voiceId = voiceId.text.toString(); s.language = lang.text.toString()
-                s.sensitivity = sens.text.toString().toFloatOrNull() ?: 0.6f
+                s.sensitivity = sens.text.toString().toFloatOrNull() ?: 0.5f
                 s.claudeModel = cm.text.toString(); s.gptModel = gm.text.toString()
                 s.personality = pers.text.toString(); s.customRules = rules.text.toString()
                 Toast.makeText(this@SettingsActivity, "Saved. Restart Jarvis to apply changes.", Toast.LENGTH_LONG).show()
