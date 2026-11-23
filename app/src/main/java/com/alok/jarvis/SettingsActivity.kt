@@ -16,12 +16,20 @@ import android.widget.TextView
 import android.widget.Toast
 
 /** Setup: keys, voice, language, models, personality, custom rules */
-class SettingsActivity : Activity() {
+class SettingsActivity : SecureActivity() {
     private var tts: TextToSpeech? = null
     private val refreshers = mutableListOf<() -> Unit>()
 
     override fun onResume() { super.onResume(); refreshers.forEach { it() } }
     override fun onDestroy() { tts?.shutdown(); super.onDestroy() }
+
+    private fun eraseAll() {
+        stopService(Intent(this, JarvisService::class.java))
+        try {
+            java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry("jarvis_master_v1")
+        } catch (_: Exception) {}
+        (getSystemService(android.app.ActivityManager::class.java)).clearApplicationUserData()   // wipes and closes the app
+    }
     private fun dp(v: Float) = Ui.dp(this, v)
 
     private fun mono(t: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
@@ -136,7 +144,7 @@ class SettingsActivity : Activity() {
         val voice = section("VOICE + LANGUAGE", "ElevenLabs is optional — without it Jarvis uses the Google voice above")
         val voiceId = field(voice, "ELEVENLABS VOICE ID", s.voiceId)
         val lang = field(voice, "SPEECH LANGUAGE  [hi-IN or en-IN]", s.language)
-        val sens = field(voice, "\"HEY JARVIS\" SENSITIVITY  [0.0 – 1.0 · higher wakes more easily]", s.sensitivity.toString())
+        val sens = field(voice, "\"JARVIS\" WAKE SENSITIVITY  [0.0 – 1.0 · higher wakes more easily]", s.sensitivity.toString())
 
         val brain = section("BRAIN", "Models and personality")
         val gmm = field(brain, "GEMINI MODEL", s.geminiModel)
@@ -172,6 +180,32 @@ class SettingsActivity : Activity() {
             background = Ui.HudPanel(this@SettingsActivity, Ui.PANEL, Ui.LINE, Ui.AMBER, 8f)
             setOnClickListener { Updater.check(this@SettingsActivity, silent = false) }
         }, LinearLayout.LayoutParams(MATCH_PARENT, dp(48f)).apply { topMargin = dp(12f) })
+
+        // ---- Security ----
+        val sec = section("SECURITY", "How Jarvis protects your phone and data")
+        sec.addView(mono(
+            "✓ Fingerprint / face / PIN needed to open Jarvis (re-locks 30 s after you leave)\n" +
+            "✓ Keys, notes and to-dos encrypted with a hardware key that never leaves the phone\n" +
+            "✓ No screenshots or screen recording of Jarvis; hidden in the recent-apps view\n" +
+            "✓ While the phone is locked, voice can't call, message, open apps or read your notes\n" +
+            "✓ Reminder text hidden on the lock screen\n" +
+            "✓ Wake word runs offline — audio is only sent out after you say \"Jarvis\"\n" +
+            "✓ HTTPS only · no backups · updates must be signed with Jarvis's own key",
+            10f, Ui.MUTED).apply { setLineSpacing(0f, 1.4f); setPadding(dp(4f), dp(10f), dp(4f), dp(6f)) })
+        sec.addView(mono("LOCK JARVIS NOW", 12f, Ui.TEXT, bold = true).apply {
+            setPadding(dp(4f), dp(14f), dp(4f), dp(8f))
+            setOnClickListener { AppLock.lockNow(); finishAffinity() }
+        })
+        sec.addView(mono("ERASE ALL JARVIS DATA", 12f, Ui.RED, bold = true).apply {
+            setPadding(dp(4f), dp(8f), dp(4f), dp(14f))
+            setOnClickListener {
+                android.app.AlertDialog.Builder(this@SettingsActivity)
+                    .setTitle("Erase everything?")
+                    .setMessage("Deletes all keys, notes, to-dos, rules and settings from this phone. This can't be undone.")
+                    .setPositiveButton("ERASE") { _, _ -> eraseAll() }
+                    .setNegativeButton("CANCEL", null).show()
+            }
+        })
 
         val build = packageManager.getPackageInfo(packageName, 0).longVersionCode
         col.addView(mono("INSTALLED BUILD $build", 9f, Ui.MUTED).apply {
