@@ -46,10 +46,15 @@ class ReminderReceiver : BroadcastReceiver() {
             .setContentTitle("Jarvis reminder")
             .setContentText(text)
             .setAutoCancel(true)
+            .setVisibility(Notification.VISIBILITY_PRIVATE)   // text hidden on the lock screen
+            .setPublicVersion(Notification.Builder(context, Reminders.CHANNEL)
+                .setSmallIcon(android.R.drawable.ic_popup_reminder)
+                .setContentTitle("Jarvis reminder").build())
             .build()
         context.getSystemService(NotificationManager::class.java)
             .notify(text.hashCode(), n)
         // Service चल रही हो तो Jarvis बोलकर भी याद दिलाएगा
-        JarvisService.instance?.speakReminder(text)
+        // When the phone is locked the text isn't read out loud (someone else may be nearby)
+        JarvisService.instance?.speakReminder(if (AppLock.phoneLocked(context)) null else text)
     }
 }
