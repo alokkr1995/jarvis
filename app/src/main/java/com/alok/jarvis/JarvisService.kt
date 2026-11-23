@@ -30,6 +30,16 @@ class JarvisService : Service() {
     companion object {
         var instance: JarvisService? = null
         var logListener: ((String) -> Unit)? = null
+        var stateListener: ((String) -> Unit)? = null
+        var chatListener: ((Boolean, String) -> Unit)? = null
+        var currentState = "off"
+        fun setState(s: String) {
+            currentState = s
+            Handler(Looper.getMainLooper()).post { stateListener?.invoke(s) }
+        }
+        fun chat(fromUser: Boolean, text: String) {
+            Handler(Looper.getMainLooper()).post { chatListener?.invoke(fromUser, text) }
+        }
         fun log(msg: String) {
             android.util.Log.d("Jarvis", msg)
             Handler(Looper.getMainLooper()).post { logListener?.invoke(msg) }
@@ -89,9 +99,11 @@ class JarvisService : Service() {
                     .build(this, PorcupineManagerCallback { _ -> main.post { onWake() } })
             }
             porcupine?.start()
+            setState("idle")
             log("👂 \"Jarvis\" का इंतज़ार...")
         } catch (e: Exception) {
             log("Wake word error: ${e.message}")
+            setState("error")
         }
     }
 
@@ -123,7 +135,7 @@ class JarvisService : Service() {
                 log("सुनाई नहीं दिया (code $error)")
                 endSession()
             }
-            override fun onReadyForSpeech(params: Bundle?) { log("🎤 बोलिए...") }
+            override fun onReadyForSpeech(params: Bundle?) { setState("listening"); log("🎤 बोलिए...") }
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
@@ -140,17 +152,21 @@ class JarvisService : Service() {
 
     private fun handleUserText(text: String) {
         log("आप: $text")
+        chat(true, text)
         val lower = text.lowercase().trim()
         if (STOP_WORDS.any { lower == it || lower.endsWith(it) }) {
             voice.speak("ठीक है Sir।") { endSession() }
             return
         }
+        setState("thinking")
         Thread {
             val reply = try { brain.ask(text) } catch (e: Exception) {
                 log("Error: ${e.message}"); "Sir, अभी connection में दिक्कत है।"
             }
             main.post {
                 log("Jarvis: $reply")
+                chat(false, reply)
+                setState("speaking")
                 voice.speak(reply) { listen() }   // जवाब के बाद follow-up सुनो
             }
         }.start()
@@ -161,6 +177,9 @@ class JarvisService : Service() {
         inSession = false
         main.postDelayed({ startWakeWord() }, 300)
     }
+
+    /** Orb पर tap = "Jarvis" बोलने जैसा */
+    fun manualWake() = onWake()
 
     /** Typed message (app screen से test करने के लिए) */
     fun askTyped(text: String) {
@@ -175,11 +194,14 @@ class JarvisService : Service() {
         if (inSession) return
         inSession = true
         stopWakeWord()
+        setState("speaking")
+        chat(false, "⏰ Reminder: $text")
         voice.speak("Sir, reminder: $text") { inSession = false; startWakeWord() }
     }
 
     override fun onDestroy() {
         instance = null
+        setState("off")
         recognizer?.destroy()
         try { porcupine?.stop(); porcupine?.delete() } catch (_: Exception) {}
         voice.shutdown()
