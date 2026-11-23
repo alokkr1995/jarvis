@@ -14,6 +14,18 @@ class Settings(context: Context) {
         get() = p.getString("anthropic", "") ?: ""
         set(v) = p.edit().putString("anthropic", v.trim()).apply()
 
+    /** Google Gemini key — free tier, no card needed */
+    var geminiKey: String
+        get() = p.getString("gemini", "") ?: ""
+        set(v) = p.edit().putString("gemini", v.trim()).apply()
+
+    var geminiModel: String
+        get() = p.getString("gemini_model", "gemini-flash-latest") ?: "gemini-flash-latest"
+        set(v) = p.edit().putString("gemini_model", v.trim()).apply()
+
+    /** true = brain has at least one key */
+    val hasBrain: Boolean get() = anthropicKey.isNotBlank() || geminiKey.isNotBlank()
+
     var openaiKey: String
         get() = p.getString("openai", "") ?: ""
         set(v) = p.edit().putString("openai", v.trim()).apply()
