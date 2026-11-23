@@ -42,8 +42,8 @@ class QuickSetupActivity : Activity() {
 
         val col = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20f), dp(24f), dp(20f), dp(40f))
-        }
+            }
+        Ui.applyInsets(col, dp(20f), dp(24f), dp(20f), dp(40f))
         col.addView(mono("QUICK SETUP", 22f, Ui.CYAN, bold = true).apply { letterSpacing = 0.25f })
         col.addView(mono("No typing. Tap a button, tap COPY on the page, come back.\nJarvis saves the key by itself.", 11f, Ui.MUTED).apply {
             setLineSpacing(0f, 1.3f); setPadding(0, dp(6f), 0, dp(20f))
